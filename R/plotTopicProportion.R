@@ -3,7 +3,7 @@
 #' @param theta_aligned List. returned object of thetaAligned().
 #' @param col_names_theta_all Character vector. Column names for long formatted theta. An example is c("iteration", "Sample", "Topic", "topic.dis")
 #' @param SampleIDVarInphyloseq Character. SampleID variable name in phyloseq object.
-#' @param design Factors of interests.
+#' @param design A factor of interest, in the form of a formula.
 #' @inheritParams alignmentMatrix
 #'
 #' @return A ggplot2 object. Histrogram of median of topic proportion in each sample.
@@ -25,11 +25,13 @@ plotTopicProportion <- function(
   SampleIDVarInphyloseq = "unique_names",
   design = ~pna
 ){
-  Sample <- Topic <- pna <- topic.dis <- NULL
+  Sample <- Topic <- topic.dis <- NULL
   median.topic.dis <- median <- NULL
 
-
-
+  # extract the terms from design
+  tf <- terms.formula(design)
+  term <- attr(tf, 'term.labels')
+  
   dimnames(theta_aligned)[[2]] <- phyloseq::sample_names(ps)
   dimnames(theta_aligned)[[3]] <- c(paste0("Topic_", seq(1,K)))
 
@@ -54,20 +56,20 @@ plotTopicProportion <- function(
   theta_all <- dplyr::left_join(
     theta_all,
     sam,
-    by =c("Sample" = "unique_names")
+    by =c("Sample" = SampleIDVarInphyloseq)
   )
 
   theta_all$Chain <- factor(theta_all$Chain)
   theta_all$Topic <- factor(theta_all$Topic)
   theta_all$Sample <- factor(theta_all$Sample)
-  theta_all$pna <- factor(theta_all$pna)
+  theta_all[,term] <- factor(theta_all[,term])
 
 
   theta_summary <- theta_all %>%
     dplyr::group_by(
       Sample,
       Topic,
-      pna
+      !!sym(term) 
     ) %>%
     dplyr::summarize(
       median.topic.dis = median(topic.dis)
@@ -83,9 +85,9 @@ plotTopicProportion <- function(
 
   p <- ggplot2::ggplot(
     theta_summary,
-    aes(x = pna,
+    aes(x = !!sym(term),
         y = Topic,
-        fill = pna)
+        fill = !!sym(term))
   )
   p <- p+
     ggplot2::geom_tile(
@@ -95,11 +97,7 @@ plotTopicProportion <- function(
       .~Sample,
       scale = "free"
     ) +
-    ggplot2::xlab("pna") +
-    ggplot2::scale_fill_manual(
-      name = "pna",
-      values = c("steelblue1","green3")
-    ) +
+    ggplot2::xlab(term) +
     ggplot2::scale_alpha(
       name = "median topic distribution"
     ) +
